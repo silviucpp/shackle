@@ -20,6 +20,7 @@
 
 -record(state, {
     client           :: client(),
+    client_bin       :: binary(),
     client_state     :: term(),
     header           :: iodata(),
     ip               :: inet:ip_address() | inet:hostname(),
@@ -68,6 +69,7 @@ init(Name, PoolName, Client, ClientOptions, Parent) ->
 
     loop(#state {
         client = Client,
+        client_bin = atom_to_binary(Client, latin1),
         header = Header,
         ip = Ip2,
         name = Name,
@@ -155,6 +157,7 @@ handle_msg(#cast {} = Cast, #state {
     {ok, State};
 handle_msg(#cast {request = Request} = Cast, #state {
         client = Client,
+        client_bin = ClientBin,
         client_state = ClientState,
         header = Header,
         pool_name = PoolName,
@@ -167,6 +170,7 @@ handle_msg(#cast {request = Request} = Cast, #state {
 
     case Protocol:send(Socket, Header, Data) of
         ok ->
+            statsderl:increment(["shackle.", ClientBin, ".send"], 1, 0.005),
             shackle_queue:add(ExtRequestId, Cast),
 
             {ok, State#state {
@@ -185,7 +189,11 @@ handle_msg({inet_reply, _Socket, {error, Reason}}, #state {
 
     shackle_utils:warning_msg(PoolName, "udp send error: ~p", [Reason]),
     {ok, State};
-handle_msg({tcp, _Port, Data}, State) ->
+handle_msg({tcp, _Port, Data}, #state {
+        client_bin = ClientBin
+    } = State) ->
+
+    statsderl:increment(["shackle.", ClientBin, ".recv"], 1, 0.005),
     handle_msg_data(Data, State);
 handle_msg({tcp_closed, Socket}, #state {
         socket = Socket,
@@ -202,7 +210,11 @@ handle_msg({tcp_error, Socket, Reason}, #state {
     shackle_utils:warning_msg(PoolName, "tcp connection error: ~p", [Reason]),
     shackle_tcp:close(Socket),
     close(State);
-handle_msg({udp, _Socket, _Ip, _InPortNo, Data}, State) ->
+handle_msg({udp, _Socket, _Ip, _InPortNo, Data}, #state {
+        client_bin = ClientBin
+    } = State) ->
+
+    statsderl:increment(["shackle.", ClientBin, ".recv"], 1, 0.005),
     handle_msg_data(Data, State).
 
 handle_msg_data(Data, #state {
@@ -230,11 +242,20 @@ loop(#state {parent = Parent} = State) ->
 
 process_replies([], _State) ->
     ok;
-process_replies([{ExtRequestId, Reply} | T], #state {name = Name} = State) ->
+process_replies([{ExtRequestId, Reply} | T], #state {
+        client_bin = ClientBin,
+        name = Name
+    } = State) ->
+
+    statsderl:increment(["shackle.", ClientBin, ".replies"], 1, 0.005),
     case shackle_queue:remove(Name, ExtRequestId) of
-        {ok, Cast} ->
+        {ok, #cast {timestamp = Timestamp} = Cast} ->
+            statsderl:increment(["shackle.", ClientBin, ".found"], 1, 0.005),
+            Diff = timer:now_diff(os:timestamp(), Timestamp),
+            statsderl:timing(["shackle.", ClientBin, ".reply"], Diff, 0.005),
             reply(Name, Reply, Cast);
         {error, not_found} ->
+            statsderl:increment(["shackle.", ClientBin, ".not_found"], 1, 0.005),
             ok
     end,
     process_replies(T, State).
