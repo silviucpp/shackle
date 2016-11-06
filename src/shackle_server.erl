@@ -255,7 +255,8 @@ process_replies([{ExtRequestId, Reply} | T], #state {
             statsderl:timing(["shackle.", ClientBin, ".reply"], Diff, 0.005),
             reply(Name, Reply, Cast);
         {error, not_found} ->
-            statsderl:increment(["shackle.", ClientBin, ".not_found"], 1, 0.005),
+            statsderl:increment(["shackle.", ClientBin, ".not_found"],
+                1, 0.005),
             ok
     end,
     process_replies(T, State).

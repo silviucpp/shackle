@@ -2,7 +2,11 @@
   {git,"https://github.com/tokenrove/granderl",
        {ref,"d3d29b9431cfbdc6766e3c18ba17b9d2624a70b2"}},
   0},
-{<<"statsderl">>,
+ {<<"parse_trans">>,
+  {git,"https://github.com/uwiger/parse_trans.git",
+       {ref,"6f3645afb43c7c57d61b54ef59aecab288ce1013"}},
+  1},
+ {<<"statsderl">>,
   {git,"https://github.com/lpgauth/statsderl.git",
-       {ref,"45eb926a2da2f75be47d19b6c51ac08066d63e55"}},
+       {ref,"6c1f703682d4f2b264c13b66580af47288cfce88"}},
   0}].
