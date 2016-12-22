@@ -13,6 +13,11 @@ bench:
 	     -eval 'shackle_bench:run()' \
 	     -eval 'init:stop()'
 
+check-specs:
+	@echo "Running check specs..."
+	@$(REBAR3) as test compile
+	@bin/check-specs
+
 clean:
 	@echo "Running rebar3 clean..."
 	@$(REBAR3) clean -a

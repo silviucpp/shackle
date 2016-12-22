@@ -1,0 +1,20 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -pa _build/test/lib/shackle/ebin -pa _build/test/lib/shackle/include -pa _build/test/lib/proper/ebin -pa _build/test/lib/granderl/ebin
+
+main([]) ->
+    main(modules_of_application(shackle));
+
+main(L) ->
+    lists:foreach(fun (M) ->
+        try
+            proper:check_specs(M)
+        catch
+        _:_ ->
+            io:fwrite(user, "~p failed to check~n", [M])
+        end
+    end, L).
+
+modules_of_application(App) ->
+    {ok, Fs} = file:list_dir(filename:dirname(code:which(App))),
+    [erlang:list_to_atom(filename:rootname(F)) || F <- Fs].
