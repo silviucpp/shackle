@@ -12,7 +12,8 @@
     reconnect_state/1,
     reconnect_state_reset/1,
     reply/3,
-    reply_all/2
+    reply_all/2,
+    connection_notification/2
 ]).
 
 %% public
@@ -96,6 +97,14 @@ reply(Name, Reply, #cast {pid = Pid} = Cast) ->
 
 reply_all(Name, Reply) ->
     reply_all(Name, Reply, shackle_queue:clear(Name)).
+
+-spec connection_notification(undefined | pid(), boolean()) ->
+    ok.
+
+connection_notification(undefined, _) ->
+    ok;
+connection_notification(Pid, IsUp) ->
+    Pid ! {shackle_connection_notification, self(), IsUp}.
 
 %% private
 client_init(Client, PoolName, InitOptions) ->

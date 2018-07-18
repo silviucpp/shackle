@@ -27,7 +27,8 @@
     reconnect_state  :: undefined | reconnect_state(),
     socket           :: undefined | inet:socket(),
     socket_options   :: [gen_udp:option()],
-    timer_ref        :: undefined | reference()
+    timer_ref        :: undefined | reference(),
+    monitor_pid      :: undefined | pid()
 }).
 
 -define(INET_AF_INET, 1).
@@ -61,6 +62,8 @@ init(Name, Parent, Opts) ->
     SocketOptions = ?LOOKUP(socket_options, ClientOptions,
         ?DEFAULT_SOCKET_OPTS),
 
+    MonitorPid = ?LOOKUP(monitor_pid, ClientOptions),
+
     {ok, {#state {
         client = Client,
         init_options = InitOptions,
@@ -70,7 +73,8 @@ init(Name, Parent, Opts) ->
         pool_name = PoolName,
         port = Port,
         reconnect_state = ReconnectState,
-        socket_options = SocketOptions
+        socket_options = SocketOptions,
+        monitor_pid = MonitorPid
     }, undefined}}.
 
 -spec handle_msg(term(), {state(), client_state()}) ->
@@ -163,13 +167,16 @@ handle_msg(?MSG_CONNECT, {#state {
         pool_name = PoolName,
         port = Port,
         reconnect_state = ReconnectState,
-        socket_options = SocketOptions
+        socket_options = SocketOptions,
+        monitor_pid = MonitorPid
     } = State, ClientState}) ->
 
     case connect(PoolName, Ip, Port, SocketOptions) of
         {ok, Header, Socket} ->
             case ?SERVER_UTILS:client(Client, PoolName, Init, inet, Socket) of
                 {ok, ClientState2} ->
+                    shackle_server_utils:connection_notification(MonitorPid, true),
+
                     ReconnectState2 =
                         ?SERVER_UTILS:reconnect_state_reset(ReconnectState),
 
@@ -199,9 +206,11 @@ terminate(_Reason, {#state {
         client = Client,
         name = Name,
         pool_name = PoolName,
-        timer_ref = TimerRef
+        timer_ref = TimerRef,
+        monitor_pid = MonitorPid
     }, ClientState}) ->
 
+    shackle_server_utils:connection_notification(MonitorPid, false),
     ?SERVER_UTILS:cancel_timer(TimerRef),
     try Client:terminate(ClientState)
     catch
@@ -230,7 +239,8 @@ connect(PoolName, Ip, Port, SocketOptions) ->
             {error, Reason}
     end.
 
-close(#state {name = Name} = State, ClientState) ->
+close(#state {name = Name, monitor_pid = MonitorPid} = State, ClientState) ->
+    shackle_server_utils:connection_notification(MonitorPid, false),
     ?SERVER_UTILS:reply_all(Name, {error, socket_closed}),
     reconnect(State, ClientState).
 

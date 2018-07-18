@@ -26,7 +26,8 @@
     reconnect_state  :: undefined | reconnect_state(),
     socket           :: undefined | ssl:sslsocket(),
     socket_options   :: [ssl:connect_option()],
-    timer_ref        :: undefined | reference()
+    timer_ref        :: undefined | reference(),
+    monitor_pid      :: undefined | pid()
 }).
 
 -type init_opts() :: {pool_name(), client(), client_options()}.
@@ -57,6 +58,8 @@ init(Name, Parent, Opts) ->
     SocketOptions = ?LOOKUP(socket_options, ClientOptions,
         ?DEFAULT_SOCKET_OPTS),
 
+    MonitorPid = ?LOOKUP(monitor_pid, ClientOptions),
+
     {ok, {#state {
         client = Client,
         init_options = InitOptions,
@@ -66,7 +69,8 @@ init(Name, Parent, Opts) ->
         pool_name = PoolName,
         port = Port,
         reconnect_state = ReconnectState,
-        socket_options = SocketOptions
+        socket_options = SocketOptions,
+        monitor_pid = MonitorPid
     }, undefined}}.
 
 -spec handle_msg(term(), {state(), client_state()}) ->
@@ -164,13 +168,16 @@ handle_msg(?MSG_CONNECT, {#state {
         pool_name = PoolName,
         port = Port,
         reconnect_state = ReconnectState,
-        socket_options = SocketOptions
+        socket_options = SocketOptions,
+        monitor_pid = MonitorPid
     } = State, ClientState}) ->
 
     case connect(PoolName, Ip, Port, SocketOptions) of
         {ok, Socket} ->
             case ?SERVER_UTILS:client(Client, PoolName, Init, ssl, Socket) of
                 {ok, ClientState2} ->
+                    shackle_server_utils:connection_notification(MonitorPid, true),
+
                     ReconnectState2 =
                         ?SERVER_UTILS:reconnect_state_reset(ReconnectState),
 
@@ -199,7 +206,8 @@ terminate(_Reason, {#state {
         client = Client,
         name = Name,
         pool_name = PoolName,
-        timer_ref = TimerRef
+        timer_ref = TimerRef,
+        monitor_pid = MonitorPid
     }, ClientState}) ->
 
     ?SERVER_UTILS:cancel_timer(TimerRef),
@@ -209,13 +217,16 @@ terminate(_Reason, {#state {
             ?WARN(PoolName, "terminate crash: ~p:~p~n~p~n",
                 [E, R, erlang:get_stacktrace()])
     end,
+
+    shackle_server_utils:connection_notification(MonitorPid, false),
     ?SERVER_UTILS:reply_all(Name, {error, shutdown}),
     shackle_backlog:delete(Name),
     ok.
 
 %% private
-close(#state {name = Name} = State, ClientState) ->
+close(#state {name = Name, monitor_pid = MonitorPid} = State, ClientState) ->
     ?SERVER_UTILS:reply_all(Name, {error, socket_closed}),
+    shackle_server_utils:connection_notification(MonitorPid, false),
     reconnect(State, ClientState).
 
 connect(PoolName, Ip, Port, SocketOptions) ->
