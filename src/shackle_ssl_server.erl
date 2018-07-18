@@ -147,11 +147,8 @@ handle_msg({timeout, ExtRequestId}, {#state {
     end,
     {ok, {State, ClientState}};
 handle_msg({ssl_closed, Socket}, {#state {
-        socket = Socket,
-        pool_name = PoolName
+        socket = Socket
     } = State, ClientState}) ->
-
-    ?WARN(PoolName, "connection closed", []),
     close(State, ClientState);
 handle_msg({ssl_error, Socket, Reason}, {#state {
         socket = Socket,
