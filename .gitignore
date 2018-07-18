@@ -2,3 +2,8 @@ doc/README.md
 erl_crash.dump
 fprofx.*
 _build
+/ebin/
+/.rebar/
+/.idea/
+/deps/
+/shackle.iml
